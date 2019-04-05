@@ -11,9 +11,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
+
+	"github.com/bvinc/go-sqlite-lite/sqlite3"
 )
 
 var clientKey string
+var dbFile string
 
 type hello struct {
 	ClientKey string `clientKey`
@@ -22,10 +26,11 @@ type hello struct {
 	MAC       string `json:mac`
 	Uname     string `json:uname`  // Output of `uname -a`
 	Uptime    string `json:uptime` // Output of `uptime`
+	Hello     string `json:hello`
 }
 
 // hearHello decodes a "hello" POST from a client.
-func hearHello(w http.ResponseWriter, r *http.Request) {
+func handleHello(w http.ResponseWriter, r *http.Request) {
 	var h hello
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&h)
@@ -37,6 +42,14 @@ func hearHello(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println(h)
+	conn, err := sqlite3.Open(dbFile)
+	if err != nil {
+		log.Println(err)
+	}
+	defer conn.Close()
+
+	// It's always a good idea to set a busy timeout
+	conn.BusyTimeout(5 * time.Second)
 }
 
 func main() {
@@ -45,9 +58,14 @@ func main() {
 		log.Fatal("please set the 'clientKey' environment variable")
 	}
 	var addr, port string
-	flag.StringVar(&addr, "a", "127.0.0.1", "network address where we server API")
-	flag.StringVar(&port, "p", "9753", "network port to serve API")
+	flag.StringVar(&addr, "address", "127.0.0.1", "network address where we server API")
+	flag.StringVar(&port, "port", "9753", "network port to serve API")
+	flag.StringVar(&dbFile, "db", "simpleinventory.db", "SQLite database file")
 	flag.Parse()
-	http.HandleFunc("/api/v1/hello", hearHello)
+	_, err := os.Stat(dbFile)
+	if err != nil {
+		log.Println("database file", dbFile, "doesn't already exist")
+	}
+	http.HandleFunc("/api/v1/hello", handleHello)
 	log.Fatal(http.ListenAndServe(addr+":"+port, nil))
 }

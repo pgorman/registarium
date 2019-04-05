@@ -18,6 +18,12 @@ curl --header "Content-Type: applicaton/json" \
 
 Simple Inventory leaves TLS terminaltion to whatever reverse proxy sits in front of it.
 
+To build, install this dependency (which, itself, relies on `gcc`):
+
+```
+$  go get github.com/bvinc/go-sqlite-lite/sqlite3
+```
+
 
 License
 ----------------------------------------
