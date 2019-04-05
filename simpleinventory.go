@@ -13,14 +13,15 @@ import (
 	"os"
 )
 
-var apiKey string
+var clientKey string
 
 type hello struct {
-	APIKey   string `apiKey`
-	LastSeen string `json:lastSeen`
-	MAC      string `json:mac`
-	IP       string `json:ip`
-	Hello    string `json:hello`
+	ClientKey string `clientKey`
+	IP        string `json:ip`
+	LastSeen  string `json:lastSeen`
+	MAC       string `json:mac`
+	Uname     string `json:uname`  // Output of `uname -a`
+	Uptime    string `json:uptime` // Output of `uptime`
 }
 
 // hearHello decodes a "hello" POST from a client.
@@ -31,7 +32,7 @@ func hearHello(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Println(err)
 	}
-	if h.APIKey != apiKey {
+	if h.ClientKey != clientKey {
 		log.Println("client sent wrong API key")
 		return
 	}
@@ -39,9 +40,9 @@ func hearHello(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	apiKey = os.Getenv("apiKey")
-	if len(apiKey) == 0 {
-		log.Fatal("please set the 'apiKey' environment variable")
+	clientKey = os.Getenv("clientKey")
+	if len(clientKey) == 0 {
+		log.Fatal("please set the 'clientKey' environment variable")
 	}
 	var addr, port string
 	flag.StringVar(&addr, "a", "127.0.0.1", "network address where we server API")
