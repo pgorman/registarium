@@ -47,25 +47,42 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 	defer conn.Close()
-
-	// It's always a good idea to set a busy timeout
 	conn.BusyTimeout(5 * time.Second)
 }
 
-func main() {
+func init() {
 	clientKey = os.Getenv("clientKey")
 	if len(clientKey) == 0 {
 		log.Fatal("please set the 'clientKey' environment variable")
 	}
+
 	var addr, port string
 	flag.StringVar(&addr, "address", "127.0.0.1", "network address where we server API")
 	flag.StringVar(&port, "port", "9753", "network port to serve API")
 	flag.StringVar(&dbFile, "db", "simpleinventory.db", "SQLite database file")
 	flag.Parse()
+
 	_, err := os.Stat(dbFile)
 	if err != nil {
 		log.Println("database file", dbFile, "doesn't already exist")
+		conn, err := sqlite3.Open(dbFile)
+		if err != nil {
+			log.Println(err)
+		}
+		defer conn.Close()
+		conn.BusyTimeout(5 * time.Second)
+		/* TODO
+		   We should probably split some of these into different database fields.
+		   E.g., extract the hostname from uptime.
+		*/
+		err = conn.Exec(`CREATE TABLE IF NOT EXISTS hellos (mac CHARACTER(18) PRIMARY KEY, ip VARCHAR(70), firstseen DATETIME, lastseen DATETIME, uname VARCAR(255), uptime VARCHAR(255), hello TEXT)`)
+		if err != nil {
+			log.Println(err)
+		}
 	}
+}
+
+func main() {
 	http.HandleFunc("/api/v1/hello", handleHello)
 	log.Fatal(http.ListenAndServe(addr+":"+port, nil))
 }
