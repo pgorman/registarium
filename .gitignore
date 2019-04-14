@@ -1,0 +1,4 @@
+*.swp
+simpleinventory.db
+go.mod
+go.sum
