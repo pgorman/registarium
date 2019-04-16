@@ -26,17 +26,17 @@ var debug bool
 var port string
 
 type client struct {
-	FirstSeen string `json:firstSeen`
-	Hardware  string `json:hardware`
-	IP        string `json:ip`
-	LastSeen  string `json:lastSeen`
-	MAC       string `json:mac`
-	MachineID string `json:machineID`
-	NodeName  string `json:nodeName`
-	OSRel     string `json:osRel`
-	OSSys     string `json:osSys`
-	OSVer     string `json:osVer`
-	Hello     string `json:hello`
+	FirstSeen string `json:"firstSeen"`
+	Hardware  string `json:"hardware"`
+	IP        string `json:"ip"`
+	LastSeen  string `json:"lastSeen"`
+	MAC       string `json:"mac"`
+	MachineID string `json:"machineID"`
+	NodeName  string `json:"nodeName"`
+	OSRel     string `json:"osRel"`
+	OSSys     string `json:"osSys"`
+	OSVer     string `json:"osVer"`
+	Hello     string `json:"hello"`
 }
 
 // handleClients returns data about known clients who have hello'd.
