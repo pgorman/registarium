@@ -61,13 +61,6 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var h client
-	decoder := json.NewDecoder(r.Body)
-	err := decoder.Decode(&h)
-	if err != nil {
-		log.Println(err)
-	}
-
 	db, err := sqlite3.Open(dbFile)
 	if err != nil {
 		log.Println(err)
