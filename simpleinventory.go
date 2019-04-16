@@ -11,24 +11,27 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/bvinc/go-sqlite-lite/sqlite3"
 )
 
 var addr string
-var port string
-var clientKey string
+var readKey string
+var writeKey string
 var charLimit int
 var dbFile string
+var debug bool
+var port string
 
-type hello struct {
-	ClientKey string `clientKey`
+type client struct {
+	FirstSeen string `json:firstSeen`
 	Hardware  string `json:hardware`
 	IP        string `json:ip`
-	FirstSeen string `json:firstSeen`
 	LastSeen  string `json:lastSeen`
 	MAC       string `json:mac`
+	MachineID string `json:machineID`
 	NodeName  string `json:nodeName`
 	OSRel     string `json:osRel`
 	OSSys     string `json:osSys`
@@ -36,46 +39,151 @@ type hello struct {
 	Hello     string `json:hello`
 }
 
-// hearHello decodes a "hello" POST from a client.
-func handleHello(w http.ResponseWriter, r *http.Request) {
-	var h hello
+// handleClients returns data about known clients who have hello'd.
+func handleClients(w http.ResponseWriter, r *http.Request) {
+	ah := r.Header.Get("Authorization")
+	if ah == "" {
+		e := "client sent no API read key"
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 401)
+		return
+	}
+	af := strings.Fields(ah)
+	sentKey := af[len(af)-1]
+	if sentKey != readKey {
+		e := "client sent wrong API read key"
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 401)
+		return
+	}
+
+	var h client
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&h)
 	if err != nil {
 		log.Println(err)
 	}
-	if h.ClientKey != clientKey {
-		log.Println("client sent wrong API key")
-		return
-	}
-	log.Println(h)
+
 	db, err := sqlite3.Open(dbFile)
 	if err != nil {
 		log.Println(err)
 	}
 	defer db.Close()
 	db.BusyTimeout(5 * time.Second)
-	err = db.Exec(`INSERT INTO hellos
-		(mac, firstSeen, hardware, ip, lastSeen, nodeName, osRel, osSys, osVer, hello)
-		values (?, CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?)
-		ON CONFLICT(mac) DO UPDATE SET
-		ip=?, lastSeen=CURRENT_TIMESTAMP, nodeName=?, osRel=?, osSys=?, osVer=?, hello=?`,
-		h.MAC, h.Hardware, h.IP, h.NodeName, h.OSRel, h.OSSys, h.OSVer, h.Hello, h.IP, h.NodeName, h.OSRel, h.OSSys, h.OSVer, h.Hello)
+
+	cursor, err := db.Prepare(`SELECT * FROM clients`)
+	if err != nil {
+		log.Println(err)
+	}
+
+	clients := make([]client, 0, 50)
+	for {
+		hasRow, err := cursor.Step()
+		if err != nil {
+			log.Println(err)
+		}
+		if !hasRow {
+			break
+		}
+		var r client
+		r.MachineID, _, _ = cursor.ColumnText(0)
+		r.FirstSeen, _, _ = cursor.ColumnText(1)
+		r.Hardware, _, _ = cursor.ColumnText(2)
+		r.IP, _, _ = cursor.ColumnText(3)
+		r.LastSeen, _, _ = cursor.ColumnText(4)
+		r.MAC, _, _ = cursor.ColumnText(5)
+		r.NodeName, _, _ = cursor.ColumnText(6)
+		r.OSRel, _, _ = cursor.ColumnText(7)
+		r.OSSys, _, _ = cursor.ColumnText(8)
+		r.OSVer, _, _ = cursor.ColumnText(9)
+		r.Hello, _, _ = cursor.ColumnText(10)
+		if debug {
+			log.Println(r)
+		}
+		clients = append(clients, r)
+	}
+
+	json.NewEncoder(w).Encode(clients)
+}
+
+// handleHello decodes a "hello" POST from a client.
+func handleHello(w http.ResponseWriter, r *http.Request) {
+	ah := r.Header.Get("Authorization")
+	if ah == "" {
+		e := "client sent no API write key"
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 401)
+		return
+	}
+	af := strings.Fields(ah)
+	sentKey := af[len(af)-1]
+	if sentKey != writeKey {
+		e := "client sent wrong API write key"
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 401)
+		return
+	}
+
+	var c client
+	decoder := json.NewDecoder(r.Body)
+	err := decoder.Decode(&c)
+	if err != nil {
+		log.Println(err)
+	}
+	if debug {
+		log.Println(c)
+	}
+	if c.MachineID == "" {
+		e := "no machineID supplied"
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 400)
+		return
+	}
+
+	db, err := sqlite3.Open(dbFile)
+	if err != nil {
+		log.Println(err)
+	}
+	defer db.Close()
+	db.BusyTimeout(5 * time.Second)
+
+	err = db.Exec(`INSERT INTO clients
+		(firstSeen, hardware, ip, lastSeen, mac, machineID, nodeName, osRel, osSys, osVer, hello)
+		values (CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(machineID) DO UPDATE SET
+		hardware=?, ip=?, lastSeen=CURRENT_TIMESTAMP, mac=?, nodeName=?, osRel=?, osSys=?, osVer=?, hello=?`,
+		c.Hardware, c.IP, c.MAC, c.MachineID, c.NodeName, c.OSRel, c.OSSys, c.OSVer, c.Hello,
+		c.Hardware, c.IP, c.MAC, c.NodeName, c.OSRel, c.OSSys, c.OSVer, c.Hello)
 	if err != nil {
 		log.Println(err)
 	}
 }
 
 func init() {
-	clientKey = os.Getenv("clientKey")
-	if len(clientKey) == 0 {
-		log.Fatal("please set the 'clientKey' environment variable")
+	readKey = os.Getenv("readKey")
+	if len(readKey) == 0 {
+		log.Fatal("please set the 'readKey' environment variable")
+	}
+	writeKey = os.Getenv("writeKey")
+	if len(writeKey) == 0 {
+		log.Fatal("please set the 'writeKey' environment variable")
 	}
 
 	flag.StringVar(&addr, "address", "127.0.0.1", "network address where we server API")
-	flag.StringVar(&port, "port", "9753", "network port to serve API")
+	flag.IntVar(&charLimit, "char-limit", 128, "truncate JSON values supplied by clients at this limit")
 	flag.StringVar(&dbFile, "db", "simpleinventory.db", "SQLite database file")
-	flag.IntVar(&charLimit, "char-limit", 99, "truncate JSON values supplied by clients at this limit")
+	flag.BoolVar(&debug, "debug", false, "show verbose debugging output")
+	flag.StringVar(&port, "port", "9753", "network port to serve API")
 	flag.Parse()
 
 	_, err := os.Stat(dbFile)
@@ -87,28 +195,21 @@ func init() {
 		}
 		defer db.Close()
 		db.BusyTimeout(5 * time.Second)
-		/*
-			Possible sources of values:
-			mac= TODO
-			hardware=uname -m
-			ip (Linux)=ip route get $(ip route show | grep default | awk '{ print $3 }') | grep src | awk '{ print $5 }'
-			ip (OpenBSD)=route -n get $(route -n show | grep default | awk '{ print $2 }') | grep 'if address' | awk '{ print $3 }'
-			nodeName=uname -n
-			osSys=uname -s
-			osRel=uname -r
-			osVer=uname -v
-		*/
-		err = db.Exec(`CREATE TABLE IF NOT EXISTS hellos
-			(mac TEXT PRIMARY KEY, firstseen NUMERIC, hardware TEXT, ip TEXT,
-			lastseen NUMERIC, nodename TEXT, osrel TEXT, ossys TEXT,
-			osver TEXT, hello TEXT)`)
+		err = db.Exec(`CREATE TABLE IF NOT EXISTS clients
+			(machineID TEXT PRIMARY KEY, firstSeen TEXT, hardware TEXT, ip TEXT,
+			lastSeen TEXT, mac TEXT, nodeName TEXT, osRel TEXT, osSys TEXT,
+			osVer TEXT, hello TEXT)`)
 		if err != nil {
 			log.Println(err)
 		}
 	}
+	if debug {
+		log.Printf("listening on %s:%s", addr, port)
+	}
 }
 
 func main() {
+	http.HandleFunc("/api/v1/clients", handleClients)
 	http.HandleFunc("/api/v1/hello", handleHello)
 	log.Fatal(http.ListenAndServe(addr+":"+port, nil))
 }
