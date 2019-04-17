@@ -28,6 +28,7 @@ var port string
 type client struct {
 	FirstSeen string `json:"firstSeen"`
 	Hardware  string `json:"hardware"`
+	HostGroup string `json:"hostGroup"`
 	IP        string `json:"ip"`
 	LastSeen  string `json:"lastSeen"`
 	MAC       string `json:"mac"`
@@ -86,16 +87,17 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 		r.MachineID, _, _ = cursor.ColumnText(0)
 		r.FirstSeen, _, _ = cursor.ColumnText(1)
 		r.Hardware, _, _ = cursor.ColumnText(2)
-		r.IP, _, _ = cursor.ColumnText(3)
-		r.LastSeen, _, _ = cursor.ColumnText(4)
-		r.MAC, _, _ = cursor.ColumnText(5)
-		r.NodeName, _, _ = cursor.ColumnText(6)
-		r.OSRel, _, _ = cursor.ColumnText(7)
-		r.OSSys, _, _ = cursor.ColumnText(8)
-		r.OSVer, _, _ = cursor.ColumnText(9)
-		r.Hello, _, _ = cursor.ColumnText(10)
+		r.HostGroup, _, _ = cursor.ColumnText(3)
+		r.IP, _, _ = cursor.ColumnText(4)
+		r.LastSeen, _, _ = cursor.ColumnText(5)
+		r.MAC, _, _ = cursor.ColumnText(6)
+		r.NodeName, _, _ = cursor.ColumnText(7)
+		r.OSRel, _, _ = cursor.ColumnText(8)
+		r.OSSys, _, _ = cursor.ColumnText(9)
+		r.OSVer, _, _ = cursor.ColumnText(10)
+		r.Hello, _, _ = cursor.ColumnText(11)
 		if debug {
-			log.Println(r)
+			log.Println("sending client record", r)
 		}
 		clients = append(clients, r)
 	}
@@ -132,7 +134,7 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 	if debug {
-		log.Println(c)
+		log.Println("receiving client hello", c)
 	}
 	if c.MachineID == "" {
 		e := "no machineID supplied"
@@ -151,12 +153,12 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	db.BusyTimeout(5 * time.Second)
 
 	err = db.Exec(`INSERT INTO clients
-		(firstSeen, hardware, ip, lastSeen, mac, machineID, nodeName, osRel, osSys, osVer, hello)
-		values (CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)
+		(firstSeen, hardware, hostGroup, ip, lastSeen, mac, machineID, nodeName, osRel, osSys, osVer, hello)
+		values (CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(machineID) DO UPDATE SET
-		hardware=?, ip=?, lastSeen=CURRENT_TIMESTAMP, mac=?, nodeName=?, osRel=?, osSys=?, osVer=?, hello=?`,
-		c.Hardware, c.IP, c.MAC, c.MachineID, c.NodeName, c.OSRel, c.OSSys, c.OSVer, c.Hello,
-		c.Hardware, c.IP, c.MAC, c.NodeName, c.OSRel, c.OSSys, c.OSVer, c.Hello)
+		hardware=?, hostGroup=?, ip=?, lastSeen=CURRENT_TIMESTAMP, mac=?, nodeName=?, osRel=?, osSys=?, osVer=?, hello=?`,
+		c.Hardware, c.HostGroup, c.IP, c.MAC, c.MachineID, c.NodeName, c.OSRel, c.OSSys, c.OSVer, c.Hello,
+		c.Hardware, c.HostGroup, c.IP, c.MAC, c.NodeName, c.OSRel, c.OSSys, c.OSVer, c.Hello)
 	if err != nil {
 		log.Println(err)
 	}
@@ -189,8 +191,8 @@ func init() {
 		defer db.Close()
 		db.BusyTimeout(5 * time.Second)
 		err = db.Exec(`CREATE TABLE IF NOT EXISTS clients
-			(machineID TEXT PRIMARY KEY, firstSeen TEXT, hardware TEXT, ip TEXT,
-			lastSeen TEXT, mac TEXT, nodeName TEXT, osRel TEXT, osSys TEXT,
+			(machineID TEXT PRIMARY KEY, firstSeen TEXT, hardware TEXT, hostGroup TEXT,
+			ip TEXT, lastSeen TEXT, mac TEXT, nodeName TEXT, osRel TEXT, osSys TEXT,
 			osVer TEXT, hello TEXT)`)
 		if err != nil {
 			log.Println(err)
@@ -204,5 +206,7 @@ func init() {
 func main() {
 	http.HandleFunc("/api/v1/clients", handleClients)
 	http.HandleFunc("/api/v1/hello", handleHello)
+	// "/api/v1/groups"
+	// "/api/v1/inventory"
 	log.Fatal(http.ListenAndServe(addr+":"+port, nil))
 }

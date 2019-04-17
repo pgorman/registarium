@@ -4,7 +4,8 @@ set -euf
 # This shell script writes a "hello" check-in to a simpleinventory API server.
 # Paul Gorman, 2019
 
-hello="I'm a developer workstation!"
+hello="I'm a developer box!"
+hostGroup=workstations
 
 apiServer=localhost
 apiPort=9753
@@ -18,8 +19,8 @@ nodeName=$(uname -n)
 osSys=$(uname -s)
 osRel=$(uname -r)
 osVer=$(uname -v)
-json=$(printf '{"hardware":"%s","ip":"%s","mac":"%s","machineID":"%s","nodeName":"%s","osRel":"%s","osSys":"%s","osVer":"%s","hello":"%s"}' \
-               "$hardware"     "$ip"     "$mac"     "$machineID"     "$nodeName"     "$osRel"     "$osSys"     "$osVer"     "$hello")
+json=$(printf '{"hardware":"%s","hostGroup":"%s","ip":"%s","mac":"%s","machineID":"%s","nodeName":"%s","osRel":"%s","osSys":"%s","osVer":"%s","hello":"%s"}' \
+               "$hardware"      "$hostGroup"     "$ip"     "$mac"     "$machineID"     "$nodeName"     "$osRel"     "$osSys"     "$osVer"     "$hello")
 
 # For scripting, "-f" may be better than "-i", so that HTTP errors yield a non-zero unix exit code.
 curl --header "Content-Type: applicaton/json" \
