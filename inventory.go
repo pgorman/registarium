@@ -2,12 +2,13 @@
 // Licensed under the 2-Clause BSD License.
 // See `LICENSE.md`.
 
-// `simpleinventory` lets client self-report their whereabouts on the network.
+// `inventory` lets client self-report their whereabouts on the network.
 package main
 
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -105,6 +106,34 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(clients)
 }
 
+// handleDoc briefly documents the API.
+func handleDoc(w http.ResponseWriter, r *http.Request) {
+	doc := `<!DOCTYPE html>
+<html lang="en-us">
+<head>
+<meta charset="utf-8" />
+<title>Inventory API Documentation</title>
+</head>
+<body>
+<h1>Inventory API Documentation</h1>
+<p>Clients report information about themselves (like their current IP address) through this API.</p>
+<p>Administrators query the API to retrieve client information in a form useful, for example, as an Ansible inventory.</p>
+<p>Clients must supply an API key in the HTTP Authorization header, and the key for reading and writing may differ. See 'example-hello.sh' and 'example-inventory.sh' supplied in the Git repository.</p>
+<dl>
+<dt>GET <b>/api/v1/</b> → HTML</dt>
+<dd>Shows this documentation page</dd>
+<dt>GET <b>/api/v1/clients</b> → JSON</dt>
+<dd>Returns the full list of known clients.</dd>
+<dt>PUT <b>/api/v1/hello</b> ← JSON</dt>
+<dd>Client adds or updates a record about itself.</dd>
+</dl>
+<p>See 'README.md' for more information.</p>
+<p>2019 Paul Gorman</p>
+</body>
+</html>`
+	fmt.Fprintf(w, doc)
+}
+
 // handleHello decodes a "hello" POST from a client.
 func handleHello(w http.ResponseWriter, r *http.Request) {
 	ah := r.Header.Get("Authorization")
@@ -176,7 +205,7 @@ func init() {
 
 	flag.StringVar(&addr, "address", "127.0.0.1", "network address where we server API")
 	flag.IntVar(&charLimit, "char-limit", 128, "truncate JSON values supplied by clients at this limit")
-	flag.StringVar(&dbFile, "db", "simpleinventory.db", "SQLite database file")
+	flag.StringVar(&dbFile, "db", "inventory.db", "SQLite database file")
 	flag.BoolVar(&debug, "debug", false, "show verbose debugging output")
 	flag.StringVar(&port, "port", "9753", "network port to serve API")
 	flag.Parse()
@@ -204,6 +233,7 @@ func init() {
 }
 
 func main() {
+	http.HandleFunc("/", handleDoc)
 	http.HandleFunc("/api/v1/clients", handleClients)
 	http.HandleFunc("/api/v1/hello", handleHello)
 	// "/api/v1/groups"
