@@ -28,6 +28,12 @@ $  go get github.com/bvinc/go-sqlite-lite/sqlite3
 ```
 
 
+Links
+----------------------------------------
+
+- https://docs.ansible.com/ansible/2.6/dev_guide/developing_inventory.html
+
+
 License
 ----------------------------------------
 

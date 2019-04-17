@@ -41,6 +41,44 @@ type client struct {
 	Hello     string `json:"hello"`
 }
 
+// handle404 returns documentation about the API.
+func handle404(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotFound)
+	doc := `<!DOCTYPE html><html lang="en-us"><head><meta charset="utf-8" /><pre>
+
+Inventory API Documentation
+
+Clients report information about themselves (like their current IP address)
+through this API.
+
+Administrators query the API to retrieve client information in a form useful,
+for example, as an Ansible inventory.
+
+Clients must supply an API key in the HTTP Authorization header, and the key
+for reading and writing may differ. See 'example-hello.sh' and
+'example-inventory.sh' supplied in the Git repository.
+
+GET  /api/v1/  → HTML
+	Shows this documentation page
+
+GET  /api/v1/clients  → JSON
+	Returns the full list of known clients.
+
+PUT  /api/v1/hello  ← JSON
+	Client adds or updates a record about itself.
+
+GET  /api/v1/inventory  → INI
+	Returns a list of known clients in INI format, usable as an Ansible
+	inventory file.
+
+See 'README.md' for more information.
+
+2019 Paul Gorman
+
+</pre></body></html>`
+	fmt.Fprintf(w, doc)
+}
+
 // handleClients returns data about known clients who have hello'd.
 func handleClients(w http.ResponseWriter, r *http.Request) {
 	ah := r.Header.Get("Authorization")
@@ -63,75 +101,34 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := sqlite3.Open(dbFile)
+	conn, err := sqlite3.Open(dbFile)
 	if err != nil {
 		log.Println(err)
 	}
-	defer db.Close()
-	db.BusyTimeout(5 * time.Second)
+	defer conn.Close()
+	conn.BusyTimeout(5 * time.Second)
 
-	cursor, err := db.Prepare(`SELECT * FROM clients`)
+	stmt, err := conn.Prepare(`SELECT * FROM clients`)
 	if err != nil {
 		log.Println(err)
 	}
 
 	clients := make([]client, 0, 50)
 	for {
-		hasRow, err := cursor.Step()
+		hasRow, err := stmt.Step()
 		if err != nil {
 			log.Println(err)
 		}
 		if !hasRow {
 			break
 		}
-		var r client
-		r.MachineID, _, _ = cursor.ColumnText(0)
-		r.FirstSeen, _, _ = cursor.ColumnText(1)
-		r.Hardware, _, _ = cursor.ColumnText(2)
-		r.HostGroup, _, _ = cursor.ColumnText(3)
-		r.IP, _, _ = cursor.ColumnText(4)
-		r.LastSeen, _, _ = cursor.ColumnText(5)
-		r.MAC, _, _ = cursor.ColumnText(6)
-		r.NodeName, _, _ = cursor.ColumnText(7)
-		r.OSRel, _, _ = cursor.ColumnText(8)
-		r.OSSys, _, _ = cursor.ColumnText(9)
-		r.OSVer, _, _ = cursor.ColumnText(10)
-		r.Hello, _, _ = cursor.ColumnText(11)
-		if debug {
-			log.Println("sending client record", r)
-		}
-		clients = append(clients, r)
+		clients = append(clients, unpackClient(stmt))
 	}
 
+	if debug {
+		log.Println("sending client records", clients)
+	}
 	json.NewEncoder(w).Encode(clients)
-}
-
-// handleDoc briefly documents the API.
-func handleDoc(w http.ResponseWriter, r *http.Request) {
-	doc := `<!DOCTYPE html>
-<html lang="en-us">
-<head>
-<meta charset="utf-8" />
-<title>Inventory API Documentation</title>
-</head>
-<body>
-<h1>Inventory API Documentation</h1>
-<p>Clients report information about themselves (like their current IP address) through this API.</p>
-<p>Administrators query the API to retrieve client information in a form useful, for example, as an Ansible inventory.</p>
-<p>Clients must supply an API key in the HTTP Authorization header, and the key for reading and writing may differ. See 'example-hello.sh' and 'example-inventory.sh' supplied in the Git repository.</p>
-<dl>
-<dt>GET <b>/api/v1/</b> → HTML</dt>
-<dd>Shows this documentation page</dd>
-<dt>GET <b>/api/v1/clients</b> → JSON</dt>
-<dd>Returns the full list of known clients.</dd>
-<dt>PUT <b>/api/v1/hello</b> ← JSON</dt>
-<dd>Client adds or updates a record about itself.</dd>
-</dl>
-<p>See 'README.md' for more information.</p>
-<p>2019 Paul Gorman</p>
-</body>
-</html>`
-	fmt.Fprintf(w, doc)
 }
 
 // handleHello decodes a "hello" POST from a client.
@@ -193,6 +190,78 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleInventory returns data about known clients in a format suitable for Ansible.
+func handleInventory(w http.ResponseWriter, r *http.Request) {
+	ah := r.Header.Get("Authorization")
+	if ah == "" {
+		e := "client sent no API read key"
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 401)
+		return
+	}
+	af := strings.Fields(ah)
+	sentKey := af[len(af)-1]
+	if sentKey != readKey {
+		e := "client sent wrong API read key"
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 401)
+		return
+	}
+
+	conn, err := sqlite3.Open(dbFile)
+	if err != nil {
+		log.Println(err)
+	}
+	defer conn.Close()
+	conn.BusyTimeout(5 * time.Second)
+
+	stmt, err := conn.Prepare(`SELECT * FROM clients`)
+	if err != nil {
+		log.Println(err)
+	}
+
+	clients := make([]client, 0, 50)
+	for {
+		hasRow, err := stmt.Step()
+		if err != nil {
+			log.Println(err)
+		}
+		if !hasRow {
+			break
+		}
+		clients = append(clients, unpackClient(stmt))
+	}
+
+	if debug {
+		log.Println("sending client records", clients)
+	}
+	for _, c := range clients {
+		fmt.Fprintln(w, c.IP)
+	}
+}
+
+// unpackClient fill a client struct with data from a SQLite row.
+func unpackClient(stmt *sqlite3.Stmt) client {
+	var c client
+	c.MachineID, _, _ = stmt.ColumnText(0)
+	c.FirstSeen, _, _ = stmt.ColumnText(1)
+	c.Hardware, _, _ = stmt.ColumnText(2)
+	c.HostGroup, _, _ = stmt.ColumnText(3)
+	c.IP, _, _ = stmt.ColumnText(4)
+	c.LastSeen, _, _ = stmt.ColumnText(5)
+	c.MAC, _, _ = stmt.ColumnText(6)
+	c.NodeName, _, _ = stmt.ColumnText(7)
+	c.OSRel, _, _ = stmt.ColumnText(8)
+	c.OSSys, _, _ = stmt.ColumnText(9)
+	c.OSVer, _, _ = stmt.ColumnText(10)
+	c.Hello, _, _ = stmt.ColumnText(11)
+	return c
+}
+
 func init() {
 	readKey = os.Getenv("readKey")
 	if len(readKey) == 0 {
@@ -213,13 +282,13 @@ func init() {
 	_, err := os.Stat(dbFile)
 	if err != nil {
 		log.Println("database file", dbFile, "doesn't already exist")
-		db, err := sqlite3.Open(dbFile)
+		conn, err := sqlite3.Open(dbFile)
 		if err != nil {
 			log.Println(err)
 		}
-		defer db.Close()
-		db.BusyTimeout(5 * time.Second)
-		err = db.Exec(`CREATE TABLE IF NOT EXISTS clients
+		defer conn.Close()
+		conn.BusyTimeout(5 * time.Second)
+		err = conn.Exec(`CREATE TABLE IF NOT EXISTS clients
 			(machineID TEXT PRIMARY KEY, firstSeen TEXT, hardware TEXT, hostGroup TEXT,
 			ip TEXT, lastSeen TEXT, mac TEXT, nodeName TEXT, osRel TEXT, osSys TEXT,
 			osVer TEXT, hello TEXT)`)
@@ -233,10 +302,10 @@ func init() {
 }
 
 func main() {
-	http.HandleFunc("/", handleDoc)
+	http.HandleFunc("/", handle404)
 	http.HandleFunc("/api/v1/clients", handleClients)
 	http.HandleFunc("/api/v1/hello", handleHello)
+	http.HandleFunc("/api/v1/inventory", handleInventory)
 	// "/api/v1/groups"
-	// "/api/v1/inventory"
 	log.Fatal(http.ListenAndServe(addr+":"+port, nil))
 }
