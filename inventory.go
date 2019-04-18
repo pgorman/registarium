@@ -245,13 +245,13 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 // unpackClient fill a client struct with data from a SQLite row.
 func unpackClient(stmt *sqlite3.Stmt) client {
 	var c client
-	c.FirstSeen, _, _ = stmt.ColumnText(1)
-	c.Hello, _, _ = stmt.ColumnText(6)
+	c.FirstSeen, _, _ = stmt.ColumnText(0)
+	c.Hello, _, _ = stmt.ColumnText(1)
 	c.HostGroup, _, _ = stmt.ColumnText(2)
 	c.IP, _, _ = stmt.ColumnText(3)
 	c.LastSeen, _, _ = stmt.ColumnText(4)
-	c.MachineID, _, _ = stmt.ColumnText(0)
-	c.NodeName, _, _ = stmt.ColumnText(5)
+	c.MachineID, _, _ = stmt.ColumnText(5)
+	c.NodeName, _, _ = stmt.ColumnText(6)
 	return c
 }
 
