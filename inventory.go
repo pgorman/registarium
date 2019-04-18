@@ -232,13 +232,38 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 		clients = append(clients, unpackClient(stmt))
 	}
 
-	// TODO Print hosts by group
+	groups := make([]string, 0, 20)
+	for _, c := range clients {
+		found := false
+		for _, g := range groups {
+			if g == c.HostGroup {
+				found = true
+				break
+			}
+		}
+		if found == false {
+			groups = append(groups, c.HostGroup)
+		}
+	}
 
 	if debug {
-		log.Println("sending client records", clients)
+		log.Println("sending INI inventory")
 	}
 	for _, c := range clients {
-		fmt.Fprintln(w, c.IP)
+		if c.HostGroup == "" {
+			fmt.Fprintln(w, c.IP)
+		}
+	}
+	for _, g := range groups {
+		if g == "" {
+			continue
+		}
+		fmt.Fprintf(w, "\n[%s]\n", g)
+		for _, c := range clients {
+			if c.HostGroup == g {
+				fmt.Fprintln(w, c.IP)
+			}
+		}
 	}
 }
 
