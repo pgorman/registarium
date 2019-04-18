@@ -21,7 +21,7 @@ import (
 var addr string
 var readKey string
 var writeKey string
-var charLimit int
+var requestByteLimit int64
 var dbFile string
 var debug bool
 var port string
@@ -154,7 +154,8 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var c client
-	decoder := json.NewDecoder(r.Body)
+	br := http.MaxBytesReader(w, r.Body, requestByteLimit)
+	decoder := json.NewDecoder(br)
 	err := decoder.Decode(&c)
 	if err != nil {
 		log.Println(err)
@@ -236,6 +237,8 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 		clients = append(clients, unpackClient(stmt))
 	}
 
+	// TODO Print hosts by group
+
 	if debug {
 		log.Println("sending client records", clients)
 	}
@@ -273,7 +276,7 @@ func init() {
 	}
 
 	flag.StringVar(&addr, "address", "127.0.0.1", "network address where we server API")
-	flag.IntVar(&charLimit, "char-limit", 128, "truncate JSON values supplied by clients at this limit")
+	flag.Int64Var(&requestByteLimit, "byte-limit", 512, "limit bytes sent by clients to this maximium")
 	flag.StringVar(&dbFile, "db", "inventory.db", "SQLite database file")
 	flag.BoolVar(&debug, "debug", false, "show verbose debugging output")
 	flag.StringVar(&port, "port", "9753", "network port to serve API")
@@ -307,5 +310,11 @@ func main() {
 	http.HandleFunc("/api/v1/hello", handleHello)
 	http.HandleFunc("/api/v1/inventory", handleInventory)
 	// "/api/v1/groups"
-	log.Fatal(http.ListenAndServe(addr+":"+port, nil))
+	s := &http.Server{
+		Addr:           addr + ":" + port,
+		MaxHeaderBytes: 1 << 4,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
+	}
+	log.Fatal(s.ListenAndServe())
 }
