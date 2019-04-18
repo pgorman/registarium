@@ -11,16 +11,12 @@ apiServer=localhost
 apiPort=9753
 writeKey=secret1234writekey
 
-hardware=$(uname -m)
 ip=$(ip route get $(ip route show | grep default | awk '{ print $3 }') | grep src | awk '{ print $5 }')
-mac=$(ip address show up | grep -B 1 "$ip" | head -n 1 | awk '{ print $2 }')
 machineID=$(cat /etc/machine-id)
+# Alternate machineID source: $(ip address show up | grep -B 1 "$ip" | head -n 1 | awk '{ print $2 }')
 nodeName=$(uname -n)
-osSys=$(uname -s)
-osRel=$(uname -r)
-osVer=$(uname -v)
-json=$(printf '{"hardware":"%s","hostGroup":"%s","ip":"%s","mac":"%s","machineID":"%s","nodeName":"%s","osRel":"%s","osSys":"%s","osVer":"%s","hello":"%s"}' \
-               "$hardware"      "$hostGroup"     "$ip"     "$mac"     "$machineID"     "$nodeName"     "$osRel"     "$osSys"     "$osVer"     "$hello")
+json=$(printf '{"hello":"%s","hostGroup":"%s","ip":"%s","machineID":"%s","nodeName":"%s"}' \
+               "$hello"     "$hostGroup"     "$ip"     "$machineID"     "$nodeName")
 
 # For scripting, "-f" may be better than "-i", so that HTTP errors yield a non-zero unix exit code.
 curl --header "Content-Type: applicaton/json" \

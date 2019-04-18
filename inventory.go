@@ -28,17 +28,12 @@ var port string
 
 type client struct {
 	FirstSeen string `json:"firstSeen"`
-	Hardware  string `json:"hardware"`
+	Hello     string `json:"hello"`
 	HostGroup string `json:"hostGroup"`
 	IP        string `json:"ip"`
 	LastSeen  string `json:"lastSeen"`
-	MAC       string `json:"mac"`
 	MachineID string `json:"machineID"`
 	NodeName  string `json:"nodeName"`
-	OSRel     string `json:"osRel"`
-	OSSys     string `json:"osSys"`
-	OSVer     string `json:"osVer"`
-	Hello     string `json:"hello"`
 }
 
 // handle404 returns documentation about the API.
@@ -180,12 +175,12 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	db.BusyTimeout(5 * time.Second)
 
 	err = db.Exec(`INSERT INTO clients
-		(firstSeen, hardware, hostGroup, ip, lastSeen, mac, machineID, nodeName, osRel, osSys, osVer, hello)
-		values (CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?)
+		(firstSeen, hello, hostGroup, ip, lastSeen, machineID, nodeName)
+		values (CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
 		ON CONFLICT(machineID) DO UPDATE SET
-		hardware=?, hostGroup=?, ip=?, lastSeen=CURRENT_TIMESTAMP, mac=?, nodeName=?, osRel=?, osSys=?, osVer=?, hello=?`,
-		c.Hardware, c.HostGroup, c.IP, c.MAC, c.MachineID, c.NodeName, c.OSRel, c.OSSys, c.OSVer, c.Hello,
-		c.Hardware, c.HostGroup, c.IP, c.MAC, c.NodeName, c.OSRel, c.OSSys, c.OSVer, c.Hello)
+		hello=?, hostGroup=?, ip=?, lastSeen=CURRENT_TIMESTAMP, nodeName=?`,
+		c.Hello, c.HostGroup, c.IP, c.MachineID, c.NodeName,
+		c.Hello, c.HostGroup, c.IP, c.NodeName)
 	if err != nil {
 		log.Println(err)
 	}
@@ -250,18 +245,13 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 // unpackClient fill a client struct with data from a SQLite row.
 func unpackClient(stmt *sqlite3.Stmt) client {
 	var c client
-	c.MachineID, _, _ = stmt.ColumnText(0)
 	c.FirstSeen, _, _ = stmt.ColumnText(1)
-	c.Hardware, _, _ = stmt.ColumnText(2)
-	c.HostGroup, _, _ = stmt.ColumnText(3)
-	c.IP, _, _ = stmt.ColumnText(4)
-	c.LastSeen, _, _ = stmt.ColumnText(5)
-	c.MAC, _, _ = stmt.ColumnText(6)
-	c.NodeName, _, _ = stmt.ColumnText(7)
-	c.OSRel, _, _ = stmt.ColumnText(8)
-	c.OSSys, _, _ = stmt.ColumnText(9)
-	c.OSVer, _, _ = stmt.ColumnText(10)
-	c.Hello, _, _ = stmt.ColumnText(11)
+	c.Hello, _, _ = stmt.ColumnText(6)
+	c.HostGroup, _, _ = stmt.ColumnText(2)
+	c.IP, _, _ = stmt.ColumnText(3)
+	c.LastSeen, _, _ = stmt.ColumnText(4)
+	c.MachineID, _, _ = stmt.ColumnText(0)
+	c.NodeName, _, _ = stmt.ColumnText(5)
 	return c
 }
 
@@ -292,9 +282,8 @@ func init() {
 		defer conn.Close()
 		conn.BusyTimeout(5 * time.Second)
 		err = conn.Exec(`CREATE TABLE IF NOT EXISTS clients
-			(machineID TEXT PRIMARY KEY, firstSeen TEXT, hardware TEXT, hostGroup TEXT,
-			ip TEXT, lastSeen TEXT, mac TEXT, nodeName TEXT, osRel TEXT, osSys TEXT,
-			osVer TEXT, hello TEXT)`)
+			(firstSeen TEXT, hello TEXT, hostGroup TEXT, ip TEXT,
+			lastSeen TEXT, machineID TEXT PRIMARY KEY, nodeName TEXT)`)
 		if err != nil {
 			log.Println(err)
 		}
