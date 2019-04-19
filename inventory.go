@@ -273,7 +273,7 @@ func init() {
 	}
 
 	flag.StringVar(&addr, "address", "127.0.0.1", "network address where we server API")
-	flag.Int64Var(&requestByteLimit, "byte-limit", 512, "limit bytes sent by clients to this maximium")
+	flag.Int64Var(&requestByteLimit, "byte-limit", 16000, "limit bytes sent by clients to this maximium")
 	flag.StringVar(&dbFile, "db", "inventory.db", "SQLite database file")
 	flag.BoolVar(&debug, "debug", false, "show verbose debugging output")
 	flag.StringVar(&port, "port", "9753", "network port to serve API")
