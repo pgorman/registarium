@@ -36,6 +36,36 @@ type client struct {
 	NodeName  string `json:"nodeName"`
 }
 
+// checkAPIKey check the API key sent by the client.
+func checkAPIKey(w http.ResponseWriter, r *http.Request) bool {
+	var k string
+	if r.Method == "GET" {
+		k = readKey
+	} else {
+		k = writeKey
+	}
+	ah := r.Header.Get("Authorization")
+	if ah == "" {
+		e := fmt.Sprintf("%s sent server no API key for %s %v", strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.URL)
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 401)
+		return false
+	}
+	af := strings.Fields(ah)
+	sentKey := af[len(af)-1]
+	if sentKey != k {
+		e := fmt.Sprintf("%s sent server the wrong API key for %s %v", strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.URL)
+		if debug {
+			log.Println(e)
+		}
+		http.Error(w, e, 401)
+		return false
+	}
+	return true
+}
+
 // handle404 returns documentation about the API.
 func handle404(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
@@ -76,23 +106,7 @@ See 'README.md' for more information.
 
 // handleClients returns data about known clients who have hello'd.
 func handleClients(w http.ResponseWriter, r *http.Request) {
-	ah := r.Header.Get("Authorization")
-	if ah == "" {
-		e := "client sent no API read key"
-		if debug {
-			log.Println(e)
-		}
-		http.Error(w, e, 401)
-		return
-	}
-	af := strings.Fields(ah)
-	sentKey := af[len(af)-1]
-	if sentKey != readKey {
-		e := "client sent wrong API read key"
-		if debug {
-			log.Println(e)
-		}
-		http.Error(w, e, 401)
+	if !checkAPIKey(w, r) {
 		return
 	}
 
@@ -121,30 +135,14 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if debug {
-		log.Println("sending client records", clients)
+		log.Println(strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.RequestURI)
 	}
 	json.NewEncoder(w).Encode(clients)
 }
 
 // handleHello decodes a "hello" POST from a client.
 func handleHello(w http.ResponseWriter, r *http.Request) {
-	ah := r.Header.Get("Authorization")
-	if ah == "" {
-		e := "client sent no API write key"
-		if debug {
-			log.Println(e)
-		}
-		http.Error(w, e, 401)
-		return
-	}
-	af := strings.Fields(ah)
-	sentKey := af[len(af)-1]
-	if sentKey != writeKey {
-		e := "client sent wrong API write key"
-		if debug {
-			log.Println(e)
-		}
-		http.Error(w, e, 401)
+	if !checkAPIKey(w, r) {
 		return
 	}
 
@@ -156,10 +154,10 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 	if debug {
-		log.Println("receiving client hello", c)
+		log.Println(strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.RequestURI, c)
 	}
 	if c.MachineID == "" {
-		e := "no machineID supplied"
+		e := fmt.Sprintf("%s supplied no machineID %s %v", strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.RequestURI)
 		if debug {
 			log.Println(e)
 		}
@@ -188,23 +186,7 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 
 // handleInventory returns data about known clients in a format suitable for Ansible.
 func handleInventory(w http.ResponseWriter, r *http.Request) {
-	ah := r.Header.Get("Authorization")
-	if ah == "" {
-		e := "client sent no API read key"
-		if debug {
-			log.Println(e)
-		}
-		http.Error(w, e, 401)
-		return
-	}
-	af := strings.Fields(ah)
-	sentKey := af[len(af)-1]
-	if sentKey != readKey {
-		e := "client sent wrong API read key"
-		if debug {
-			log.Println(e)
-		}
-		http.Error(w, e, 401)
+	if !checkAPIKey(w, r) {
 		return
 	}
 
@@ -247,7 +229,7 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if debug {
-		log.Println("sending INI inventory")
+		log.Println(strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.RequestURI)
 	}
 	for _, c := range clients {
 		if c.HostGroup == "" {
