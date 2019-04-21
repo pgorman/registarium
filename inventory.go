@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,12 +20,13 @@ import (
 )
 
 var addr string
-var readKey string
-var writeKey string
-var requestByteLimit int64
 var dbFile string
 var debug bool
+var readKey string
+var reForwarded *regexp.Regexp
+var requestByteLimit int64
 var port string
+var writeKey string
 
 type client struct {
 	FirstSeen string `json:"firstSeen"`
@@ -46,7 +48,7 @@ func checkAPIKey(w http.ResponseWriter, r *http.Request) bool {
 	}
 	ah := r.Header.Get("Authorization")
 	if ah == "" {
-		e := fmt.Sprintf("%s sent server no API key for %s %v", strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.URL)
+		e := fmt.Sprintf("%s sent server no API key for %s %v", clientIP(r), r.Method, r.URL)
 		if debug {
 			log.Println(e)
 		}
@@ -56,7 +58,7 @@ func checkAPIKey(w http.ResponseWriter, r *http.Request) bool {
 	af := strings.Fields(ah)
 	sentKey := af[len(af)-1]
 	if sentKey != k {
-		e := fmt.Sprintf("%s sent server the wrong API key for %s %v", strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.URL)
+		e := fmt.Sprintf("%s sent server the wrong API key for %s %v", clientIP(r), r.Method, r.URL)
 		if debug {
 			log.Println(e)
 		}
@@ -64,6 +66,23 @@ func checkAPIKey(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+// clientIP sets the IP address written to logs and debugging messages.
+func clientIP(r *http.Request) string {
+	var addr string
+	if r.Header.Get("Forwarded") != "" { // RFC 7239
+		if reForwarded.FindStringSubmatch(r.Header.Get("Forwarded")) != nil {
+			addr = reForwarded.FindStringSubmatch(r.Header.Get("Forwarded"))[1]
+		}
+	} else if r.Header.Get("X-Real-IP") != "" {
+		addr = r.Header.Get("X-Real-IP")
+	} else if r.Header.Get("X-Forwarded-For") != "" {
+		addr = strings.SplitN(r.Header.Get("X-Forwarded-For"), ",", 2)[0]
+	} else {
+		addr = strings.SplitN(r.RemoteAddr, ":", 2)[0]
+	}
+	return addr
 }
 
 // handle404 returns documentation about the API.
@@ -135,7 +154,7 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if debug {
-		log.Println(strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.RequestURI)
+		log.Println(clientIP(r), r.Method, r.RequestURI)
 	}
 	json.NewEncoder(w).Encode(clients)
 }
@@ -154,10 +173,10 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 	if debug {
-		log.Println(strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.RequestURI, c)
+		log.Println(clientIP(r), r.Method, r.RequestURI, c)
 	}
 	if c.MachineID == "" {
-		e := fmt.Sprintf("%s supplied no machineID %s %v", strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.RequestURI)
+		e := fmt.Sprintf("%s supplied no machineID %s %v", clientIP(r), r.Method, r.RequestURI)
 		if debug {
 			log.Println(e)
 		}
@@ -229,7 +248,7 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if debug {
-		log.Println(strings.SplitN(r.RemoteAddr, ":", 2)[0], r.Method, r.RequestURI)
+		log.Println(clientIP(r), r.Method, r.RequestURI)
 	}
 	for _, c := range clients {
 		if c.HostGroup == "" {
@@ -263,6 +282,8 @@ func unpackClient(stmt *sqlite3.Stmt) client {
 }
 
 func init() {
+	reForwarded = regexp.MustCompile(`(?i)for="?([^,;\s"]+)"?`)
+
 	readKey = os.Getenv("readKey")
 	if len(readKey) == 0 {
 		log.Fatal("please set the 'readKey' environment variable")

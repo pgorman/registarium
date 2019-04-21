@@ -20,6 +20,7 @@ The only required key is `machineID`.
 See `example-client.sh`.
 
 Simple Inventory leaves TLS termination to whatever reverse proxy sits in front of it.
+When using a reverse proxy, remember to set the client's original IP in a header like `Forwarded` or `X-Real-IP` to keep logging and debug messages helpful.
 
 To build, install this dependency (which, itself, relies on `gcc`):
 
