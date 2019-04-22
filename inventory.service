@@ -1,0 +1,15 @@
+[Unit]
+Description=Inventory API Server
+Documentation=https://github.com/pgorman/inventory
+Wants=network.target
+After=network.target
+
+[Service]
+Type=simple
+Environment='readKey=secret1234readkey' 'writeKey=secret1234writekey'
+ExecStart=/usr/local/bin/inventory
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
