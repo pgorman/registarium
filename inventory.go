@@ -36,6 +36,7 @@ type client struct {
 	LastSeen  string `json:"lastSeen"`
 	MachineID string `json:"machineID"`
 	NodeName  string `json:"nodeName"`
+	Variables string `json:"variables"`
 }
 
 // checkAPIKey check the API key sent by the client.
@@ -192,12 +193,12 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 	db.BusyTimeout(5 * time.Second)
 
 	err = db.Exec(`INSERT INTO clients
-		(firstSeen, hello, hostGroup, ip, lastSeen, machineID, nodeName)
-		values (CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
+		(firstSeen, hello, hostGroup, ip, lastSeen, machineID, nodeName, variables)
+		values (CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
 		ON CONFLICT(machineID) DO UPDATE SET
-		hello=?, hostGroup=?, ip=?, lastSeen=CURRENT_TIMESTAMP, nodeName=?`,
-		c.Hello, c.HostGroup, c.IP, c.MachineID, c.NodeName,
-		c.Hello, c.HostGroup, c.IP, c.NodeName)
+		hello=?, hostGroup=?, ip=?, lastSeen=CURRENT_TIMESTAMP, nodeName=?, variables=?`,
+		c.Hello, c.HostGroup, c.IP, c.MachineID, c.NodeName, c.Variables,
+		c.Hello, c.HostGroup, c.IP, c.NodeName, c.Variables)
 	if err != nil {
 		log.Println(err)
 	}
@@ -252,7 +253,7 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, c := range clients {
 		if c.HostGroup == "" {
-			fmt.Fprintln(w, c.IP)
+			fmt.Fprintln(w, c.IP, c.Variables)
 		}
 	}
 	for _, g := range groups {
@@ -262,7 +263,7 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "\n[%s]\n", g)
 		for _, c := range clients {
 			if c.HostGroup == g {
-				fmt.Fprintln(w, c.IP)
+				fmt.Fprintln(w, c.IP, c.Variables)
 			}
 		}
 	}
@@ -278,6 +279,7 @@ func unpackClient(stmt *sqlite3.Stmt) client {
 	c.LastSeen, _, _ = stmt.ColumnText(4)
 	c.MachineID, _, _ = stmt.ColumnText(5)
 	c.NodeName, _, _ = stmt.ColumnText(6)
+	c.Variables, _, _ = stmt.ColumnText(7)
 	return c
 }
 
@@ -310,8 +312,8 @@ func init() {
 		defer conn.Close()
 		conn.BusyTimeout(5 * time.Second)
 		err = conn.Exec(`CREATE TABLE IF NOT EXISTS clients
-			(firstSeen TEXT, hello TEXT, hostGroup TEXT, ip TEXT,
-			lastSeen TEXT, machineID TEXT PRIMARY KEY, nodeName TEXT)`)
+			(firstSeen TEXT, hello TEXT, hostGroup TEXT, ip TEXT, lastSeen TEXT,
+			machineID TEXT PRIMARY KEY, nodeName TEXT, variables TEXT)`)
 		if err != nil {
 			log.Println(err)
 		}

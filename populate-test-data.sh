@@ -10,7 +10,7 @@ writeKey=secret1234writekey
 
 curl --header "Content-Type: applicaton/json" \
 	--header "Authorization: ApiKey $writeKey" \
-	--data '{"machineID":"7d5cee0875b046fbb57ac830f262c2b9","ip":"192.0.2.202","nodeName":"bell","hostGroup":""}' \
+	--data '{"machineID":"7d5cee0875b046fbb57ac830f262c2b9","ip":"192.0.2.202","nodeName":"bell","hostGroup":"","variables":"ansible_port=10022 ansible_user=wtch"}' \
 	http://"$apiServer":"$apiPort"/api/v1/hello
 curl --header "Content-Type: applicaton/json" \
 	--header "Authorization: ApiKey $writeKey" \
@@ -42,7 +42,7 @@ curl --header "Content-Type: applicaton/json" \
 	http://"$apiServer":"$apiPort"/api/v1/hello
 curl --header "Content-Type: applicaton/json" \
 	--header "Authorization: ApiKey $writeKey" \
-	--data '{"machineID":"7253ef0845b046ffb07ac530f289c162","ip":"192.0.2.39","nodeName":"arrow","hostGroup":"smarthosts"}' \
+	--data '{"machineID":"7253ef0845b046ffb07ac530f289c162","ip":"192.0.2.39","nodeName":"arrow","hostGroup":"smarthosts","variables":"ansible_port=22222 ansible_user=shadm"}' \
 	http://"$apiServer":"$apiPort"/api/v1/hello
 curl --header "Content-Type: applicaton/json" \
 	--header "Authorization: ApiKey $writeKey" \
