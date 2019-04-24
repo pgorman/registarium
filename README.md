@@ -82,6 +82,7 @@ myserver#  chmod 600 registarium.service
 myserver#  mv registarium.service /etc/systemd/system/
 myserver#  sudo mkdir -p /var/local/registarium
 myserver#  chown root:staff /var/local/registarium
+myserver#  systemctl daemon-reload
 myserver#  systemctl enable registarium.service
 myserver#  systemctl start registarium.service
 ```
