@@ -35,7 +35,6 @@ Get the Registarium source and its one dependency:
 $  cd $GOPATH/src
 $  go get github.com/pgorman/registarium
 $  go get github.com/bvinc/go-sqlite-lite/sqlite3
-
 ```
 
 Note that the sqlite3 package uses CGO, so it needs a minimal C toolchain.

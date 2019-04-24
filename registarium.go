@@ -86,6 +86,62 @@ func clientIP(r *http.Request) string {
 	return addr
 }
 
+// clientsQuery gets a list of clients from SQLite filtered by URL query string.
+func clientsQuery(r *http.Request) []client {
+	w := make([]string, 0, 3)
+	b := make([]interface{}, 0, 3)
+	v := r.URL.Query()
+	if v.Get("lastSeenAfter") != "" {
+		w = append(w, "lastSeen >= datetime(?)")
+		b = append(b, v.Get("lastSeenAfter"))
+	}
+	if v.Get("lastSeenBefore") != "" {
+		w = append(w, "lastSeen <= datetime(?)")
+		b = append(b, v.Get("lastSeenBefore"))
+	}
+	if v.Get("hostGroup") != "" {
+		w = append(w, "hostGroup = ?")
+		b = append(b, v.Get("hostGroup"))
+	}
+	s := `SELECT * FROM clients`
+	if len(w) > 0 {
+		s = s + " WHERE " + strings.Join(w, " AND ")
+	}
+	if debug {
+		log.Println(s)
+	}
+
+	conn, err := sqlite3.Open(dbFile)
+	if err != nil {
+		log.Println(err)
+	}
+	defer conn.Close()
+	conn.BusyTimeout(5 * time.Second)
+
+	stmt, err := conn.Prepare(s)
+	if err != nil {
+		log.Println(err)
+	}
+	defer stmt.Close()
+	err = stmt.Exec(b...)
+	if err != nil {
+		log.Println(err)
+	}
+
+	clients := make([]client, 0, 50)
+	for {
+		hasRow, err := stmt.Step()
+		if err != nil {
+			log.Println(err)
+		}
+		if !hasRow {
+			break
+		}
+		clients = append(clients, unpackClient(stmt))
+	}
+	return clients
+}
+
 // handle404 returns documentation about the API.
 func handle404(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
@@ -116,6 +172,18 @@ GET  /api/v1/inventory  → INI
 	Returns a list of known clients in INI format, usable as an Ansible
 	inventory file.
 
+The 'inventory' URL accepts these filtering query strings:
+
+lastSeenAfter  /api/v1/inventory?lastSeenAfter=2019-04-24%2012:00:00
+	Returns only clients that have checked in after the specified date.
+
+lastSeenBefore /api/v1/inventory?lastSeenBefore=2019-04-24%2012:00:00
+	Returns only clients that have NOT checked in since before the
+	specified date.
+
+hostGroup      /api/v1/inventory?hostGroup=workstations
+	Returns only clients that belong to the specified group.
+
 See 'README.md' for more information.
 
 2019 Paul Gorman
@@ -130,33 +198,12 @@ func handleClients(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := sqlite3.Open(dbFile)
-	if err != nil {
-		log.Println(err)
-	}
-	defer conn.Close()
-	conn.BusyTimeout(5 * time.Second)
-
-	stmt, err := conn.Prepare(`SELECT * FROM clients`)
-	if err != nil {
-		log.Println(err)
-	}
-
-	clients := make([]client, 0, 50)
-	for {
-		hasRow, err := stmt.Step()
-		if err != nil {
-			log.Println(err)
-		}
-		if !hasRow {
-			break
-		}
-		clients = append(clients, unpackClient(stmt))
-	}
-
 	if debug {
 		log.Println(clientIP(r), r.Method, r.RequestURI)
 	}
+
+	clients := clientsQuery(r)
+
 	json.NewEncoder(w).Encode(clients)
 }
 
@@ -185,14 +232,14 @@ func handleHello(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := sqlite3.Open(dbFile)
+	conn, err := sqlite3.Open(dbFile)
 	if err != nil {
 		log.Println(err)
 	}
-	defer db.Close()
-	db.BusyTimeout(5 * time.Second)
+	defer conn.Close()
+	conn.BusyTimeout(5 * time.Second)
 
-	err = db.Exec(`INSERT INTO clients
+	err = conn.Exec(`INSERT INTO clients
 		(firstSeen, hello, hostGroup, ip, lastSeen, machineID, nodeName, variables)
 		values (CURRENT_TIMESTAMP, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
 		ON CONFLICT(machineID) DO UPDATE SET
@@ -210,29 +257,11 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conn, err := sqlite3.Open(dbFile)
-	if err != nil {
-		log.Println(err)
-	}
-	defer conn.Close()
-	conn.BusyTimeout(5 * time.Second)
-
-	stmt, err := conn.Prepare(`SELECT * FROM clients`)
-	if err != nil {
-		log.Println(err)
+	if debug {
+		log.Println(clientIP(r), r.Method, r.RequestURI)
 	}
 
-	clients := make([]client, 0, 50)
-	for {
-		hasRow, err := stmt.Step()
-		if err != nil {
-			log.Println(err)
-		}
-		if !hasRow {
-			break
-		}
-		clients = append(clients, unpackClient(stmt))
-	}
+	clients := clientsQuery(r)
 
 	groups := make([]string, 0, 20)
 	for _, c := range clients {
@@ -248,9 +277,6 @@ func handleInventory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if debug {
-		log.Println(clientIP(r), r.Method, r.RequestURI)
-	}
 	for _, c := range clients {
 		if c.HostGroup == "" {
 			fmt.Fprintln(w, c.IP, c.Variables)
