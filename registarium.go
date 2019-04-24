@@ -2,7 +2,7 @@
 // Licensed under the 2-Clause BSD License.
 // See `LICENSE.md`.
 
-// `inventory` lets client self-report their whereabouts on the network.
+// `registarium` lets client self-report their whereabouts on the network.
 package main
 
 import (
@@ -91,7 +91,7 @@ func handle404(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 	doc := `<!DOCTYPE html><html lang="en-us"><head><meta charset="utf-8" /><pre>
 
-Inventory API Documentation
+Registarium API Documentation
 
 Clients report information about themselves (like their current IP address)
 through this API.
@@ -288,7 +288,7 @@ func init() {
 
 	flag.StringVar(&addr, "address", "127.0.0.1", "network address where we server API")
 	flag.Int64Var(&requestByteLimit, "byte-limit", 16000, "limit bytes sent by clients to this maximium")
-	flag.StringVar(&dbFile, "db", "inventory.db", "SQLite database file")
+	flag.StringVar(&dbFile, "db", "registarium.db", "SQLite database file")
 	flag.BoolVar(&debug, "debug", false, "show verbose debugging output")
 	flag.StringVar(&port, "port", "9753", "network port to serve API")
 	flag.Parse()
