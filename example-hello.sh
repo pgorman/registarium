@@ -12,7 +12,7 @@ apiPort=9753
 writeKey=secret1234writekey
 
 ip=$(ip route get $(ip route show | grep default | awk '{ print $3 }') | grep src | awk '{ print $5 }')
-machineID=$(cat /etc/machine-id)
+machineID=$(cat /etc/machine-id | sha256sum | awk '{ print $1 }')
 # Alternate machineID source: $(ip address show up | grep -B 1 "$ip" | head -n 1 | awk '{ print $2 }')
 nodeName=$(uname -n)
 json=$(printf '{"hello":"%s","hostGroup":"%s","ip":"%s","machineID":"%s","nodeName":"%s"}' \
